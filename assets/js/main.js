@@ -187,4 +187,157 @@
 				}
 			});
 
+	// Custom voting flow for the gala page.
+		var candidates = [
+			{ name: 'Michał Krawczyk', faculty: 'Wydział Informatyki', commission: 'komisja współpracy' },
+			{ name: 'Karolina Szymańska', faculty: 'Wydział Zarządzania', commission: 'komisja kultury' },
+			{ name: 'Patryk Nowicki', faculty: 'Wydział Mechaniczny', commission: 'komisja sportu' },
+			{ name: 'Alicja Wiśniewska', faculty: 'Wydział Budownictwa', commission: 'komisja promocji' }
+		];
+		var fallbackVoters = [
+			{ name: 'Jan Nowak', faculty: 'Wydział Informatyki', commission: 'komisja współpracy' },
+			{ name: 'Anna Kowalska', faculty: 'Wydział Zarządzania', commission: 'komisja kultury' },
+			{ name: 'Piotr Wiśniewski', faculty: 'Wydział Mechaniczny', commission: 'komisja sportu' },
+			{ name: 'Marta Zielińska', faculty: 'Wydział Budownictwa', commission: 'komisja promocji' }
+		];
+		var voters = [];
+		var votes = {};
+		var showResults = false;
+
+		function normalizeValue(value) {
+			return (value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+		}
+
+		function parseVoters(rawText) {
+			return rawText.split(/\r?\n/).filter(Boolean).map(function(line) {
+				var parts = line.split('-').map(function(part) {
+					return part.trim();
+				});
+
+				if (parts.length >= 3) {
+					return { name: parts[0], faculty: parts[1], commission: parts[2] };
+				}
+
+				return null;
+			}).filter(Boolean);
+		}
+
+		function buildCandidateOptions() {
+			var select = document.getElementById('candidateSelect');
+			if (!select) {
+				return;
+			}
+
+			select.innerHTML = '';
+			candidates.forEach(function(candidate) {
+				var option = document.createElement('option');
+				option.value = candidate.name;
+				option.textContent = candidate.name + ' — ' + candidate.faculty + ' — ' + candidate.commission;
+				select.appendChild(option);
+			});
+		}
+
+		function setStatus(message, isError) {
+			var status = document.getElementById('voteStatus');
+			if (!status) {
+				return;
+			}
+
+			status.textContent = message;
+			status.style.color = isError ? '#ffb4b4' : '#d9ffb3';
+		}
+
+		function getVoterByIdentity(name, faculty, commission) {
+			return voters.find(function(voter) {
+				return normalizeValue(voter.name) === normalizeValue(name)
+					&& normalizeValue(voter.faculty) === normalizeValue(faculty)
+					&& normalizeValue(voter.commission) === normalizeValue(commission);
+			});
+		}
+
+		function updateResults() {
+			var resultsContent = document.getElementById('resultsContent');
+			if (!resultsContent) {
+				return;
+			}
+
+			if (!showResults) {
+				resultsContent.innerHTML = '<p>Wyniki są ukryte. Kliknij przycisk, aby je zobaczyć.</p>';
+				return;
+			}
+
+			var rows = candidates.map(function(candidate) {
+				var count = votes[candidate.name] || 0;
+				return '<li><strong>' + candidate.name + '</strong> — ' + count + ' głosów</li>';
+			}).join('');
+
+			resultsContent.innerHTML = '<ul>' + rows + '</ul>';
+		}
+
+		function loadVoters() {
+			return fetch('voters.txt').then(function(response) {
+				if (!response || !response.ok) {
+					throw new Error('Fallback');
+				}
+				return response.text();
+			}).then(function(rawText) {
+				voters = parseVoters(rawText);
+			}).catch(function() {
+				voters = fallbackVoters;
+			}).then(function() {
+				buildCandidateOptions();
+				updateResults();
+			});
+		}
+
+		candidates.forEach(function(candidate) {
+			votes[candidate.name] = 0;
+		});
+
+		var voteForm = document.getElementById('voteForm');
+		if (voteForm) {
+			voteForm.addEventListener('submit', function(event) {
+				event.preventDefault();
+
+				var name = document.getElementById('voterName').value.trim();
+				var faculty = document.getElementById('voterFaculty').value.trim();
+				var commission = document.getElementById('voterCommission').value.trim();
+				var candidateName = document.getElementById('candidateSelect').value;
+				var candidate = candidates.find(function(entry) {
+					return entry.name === candidateName;
+				});
+				var voter = getVoterByIdentity(name, faculty, commission);
+
+				if (!voter) {
+					setStatus('Nie znaleziono Cię w pliku voters.txt. Nie możesz oddać głosu.', true);
+					return;
+				}
+
+				if (!candidate) {
+					setStatus('Wybierz kandydata z listy.', true);
+					return;
+				}
+
+				if (normalizeValue(faculty) === 'wydział informatyki' && (normalizeValue(candidate.faculty) === normalizeValue(faculty) || normalizeValue(candidate.commission) === normalizeValue(commission))) {
+					setStatus('Osoby z Wydziału Informatyki nie mogą głosować na własny wydział ani na własną komisję.', true);
+					return;
+				}
+
+				votes[candidate.name] = (votes[candidate.name] || 0) + 1;
+				setStatus('Twój głos został oddany poprawnie.', false);
+				updateResults();
+			});
+		}
+
+		var toggleResultsButton = document.getElementById('toggleResults');
+		if (toggleResultsButton) {
+			toggleResultsButton.addEventListener('click', function() {
+				showResults = !showResults;
+				toggleResultsButton.textContent = showResults ? 'Ukryj wyniki' : 'Pokaż wyniki';
+				updateResults();
+			});
+		}
+
+		loadVoters();
+
 })(jQuery);
