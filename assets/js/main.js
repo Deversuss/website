@@ -207,6 +207,9 @@
 		var voterPoints = {};
 		var showResults = false;
 
+		candidates = fallbackCandidates.slice();
+		voters = fallbackVoters.slice();
+
 		function normalizeValue(value) {
 			return (value || '').toLowerCase().replace(/\s+/g, ' ').trim();
 		}
@@ -398,15 +401,23 @@
 		}
 
 		function loadVotingData() {
-			return fetch('voters.txt').then(function(response) {
-				if (!response || !response.ok) {
-					throw new Error('Fallback');
-				}
-				return response.text();
-			}).then(function(rawText) {
-				voters = parseVoters(rawText);
-			}).catch(function() {
-				voters = fallbackVoters;
+			candidates = fallbackCandidates.slice();
+			voters = fallbackVoters.slice();
+			resetVotes();
+
+			var loadPromise = Promise.resolve();
+
+			loadPromise = loadPromise.then(function() {
+				return fetch('voters.txt').then(function(response) {
+					if (!response || !response.ok) {
+						throw new Error('Fallback');
+					}
+					return response.text();
+				}).then(function(rawText) {
+					voters = parseVoters(rawText);
+				}).catch(function() {
+					voters = fallbackVoters.slice();
+				});
 			}).then(function() {
 				return fetch('voted.txt').then(function(response) {
 					if (!response || !response.ok) {
@@ -416,11 +427,9 @@
 				}).then(function(rawText) {
 					candidates = parseCandidates(rawText);
 				}).catch(function() {
-					candidates = fallbackCandidates;
+					candidates = fallbackCandidates.slice();
 				});
 			}).then(function() {
-				resetVotes();
-
 				var savedVotes = localStorage.getItem('galaStatistics');
 				if (savedVotes) {
 					try {
@@ -474,6 +483,8 @@
 				saveStatisticsToStorage();
 				updateResults();
 			});
+
+			return loadPromise;
 		}
 
 		var voteForm = document.getElementById('voteForm');
