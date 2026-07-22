@@ -188,7 +188,7 @@
 			});
 
 	// Custom voting flow for the gala page.
-		var candidates = [
+		var fallbackCandidates = [
 			{ name: 'Michał Krawczyk', faculty: 'Wydział Informatyki', commission: 'komisja współpracy' },
 			{ name: 'Karolina Szymańska', faculty: 'Wydział Zarządzania', commission: 'komisja kultury' },
 			{ name: 'Patryk Nowicki', faculty: 'Wydział Mechaniczny', commission: 'komisja sportu' },
@@ -200,7 +200,9 @@
 			{ name: 'Piotr Wiśniewski', faculty: 'Wydział Mechaniczny', commission: 'komisja sportu' },
 			{ name: 'Marta Zielińska', faculty: 'Wydział Budownictwa', commission: 'komisja promocji' }
 		];
+		var candidates = [];
 		var voters = [];
+		var votedVoters = [];
 		var votes = {};
 		var showResults = false;
 
@@ -220,6 +222,41 @@
 
 				return null;
 			}).filter(Boolean);
+		}
+
+		function parseCandidates(rawText) {
+			return rawText.split(/\r?\n/).filter(Boolean).map(function(line) {
+				var parts = line.split('-').map(function(part) {
+					return part.trim();
+				});
+
+				if (parts.length >= 3) {
+					return { name: parts[0], faculty: parts[1], commission: parts[2] };
+				}
+
+				return null;
+			}).filter(Boolean);
+		}
+
+		function parseStatistics(rawText) {
+			var rows = rawText.split(/\r?\n/).filter(Boolean);
+			var stats = {};
+
+			if (rows.length < 2) {
+				return stats;
+			}
+
+			rows.slice(1).forEach(function(row) {
+				var columns = row.split(',').map(function(cell) {
+					return cell.trim();
+				});
+
+				if (columns.length >= 4) {
+					stats[columns[0]] = parseInt(columns[3], 10) || 0;
+				}
+			});
+
+			return stats;
 		}
 
 		function buildCandidateOptions() {
@@ -255,6 +292,26 @@
 			});
 		}
 
+		function getVoterKey(name, faculty, commission) {
+			return normalizeValue(name) + '|' + normalizeValue(faculty) + '|' + normalizeValue(commission);
+		}
+
+		function resetVotes() {
+			votes = {};
+			candidates.forEach(function(candidate) {
+				votes[candidate.name] = 0;
+			});
+		}
+
+		function saveStatisticsToStorage() {
+			var csvContent = 'name,faculty,commission,votes\n' + candidates.map(function(candidate) {
+				return [candidate.name, candidate.faculty, candidate.commission, votes[candidate.name] || 0].join(',');
+			}).join('\n');
+
+			localStorage.setItem('galaStatistics', JSON.stringify(votes));
+			localStorage.setItem('galaStatisticsCsv', csvContent);
+		}
+
 		function updateResults() {
 			var resultsContent = document.getElementById('resultsContent');
 			if (!resultsContent) {
@@ -274,7 +331,7 @@
 			resultsContent.innerHTML = '<ul>' + rows + '</ul>';
 		}
 
-		function loadVoters() {
+		function loadVotingData() {
 			return fetch('voters.txt').then(function(response) {
 				if (!response || !response.ok) {
 					throw new Error('Fallback');
@@ -285,14 +342,63 @@
 			}).catch(function() {
 				voters = fallbackVoters;
 			}).then(function() {
+				return fetch('voted.txt').then(function(response) {
+					if (!response || !response.ok) {
+						throw new Error('FallbackCandidates');
+					}
+					return response.text();
+				}).then(function(rawText) {
+					candidates = parseCandidates(rawText);
+				}).catch(function() {
+					candidates = fallbackCandidates;
+				});
+			}).then(function() {
+				resetVotes();
+
+				var savedVotes = localStorage.getItem('galaStatistics');
+				if (savedVotes) {
+					try {
+						var parsedVotes = JSON.parse(savedVotes);
+						Object.keys(parsedVotes).forEach(function(candidateName) {
+							if (votes[candidateName] !== undefined) {
+								votes[candidateName] = parsedVotes[candidateName];
+							}
+						});
+					} catch (error) {
+						console.log('Unable to parse saved statistics');
+					}
+				} else {
+					return fetch('statistics.csv').then(function(response) {
+						if (!response || !response.ok) {
+							throw new Error('FallbackStats');
+						}
+						return response.text();
+					}).then(function(rawText) {
+						var stats = parseStatistics(rawText);
+						Object.keys(stats).forEach(function(candidateName) {
+							if (votes[candidateName] !== undefined) {
+								votes[candidateName] = stats[candidateName];
+							}
+						});
+					}).catch(function() {
+						return null;
+					});
+				}
+			}).then(function() {
+				var savedVoters = localStorage.getItem('galaVotedVoters');
+				if (savedVoters) {
+					try {
+						votedVoters = JSON.parse(savedVoters);
+					} catch (error) {
+						votedVoters = [];
+					}
+				}
+
 				buildCandidateOptions();
+				saveStatisticsToStorage();
 				updateResults();
 			});
 		}
-
-		candidates.forEach(function(candidate) {
-			votes[candidate.name] = 0;
-		});
 
 		var voteForm = document.getElementById('voteForm');
 		if (voteForm) {
@@ -307,9 +413,15 @@
 					return entry.name === candidateName;
 				});
 				var voter = getVoterByIdentity(name, faculty, commission);
+				var voterKey = getVoterKey(name, faculty, commission);
 
 				if (!voter) {
 					setStatus('Nie znaleziono Cię w pliku voters.txt. Nie możesz oddać głosu.', true);
+					return;
+				}
+
+				if (votedVoters.indexOf(voterKey) !== -1) {
+					setStatus('Ten wyborca już oddał głos. Jednorazowy głos został wykorzystany.', true);
 					return;
 				}
 
@@ -324,6 +436,9 @@
 				}
 
 				votes[candidate.name] = (votes[candidate.name] || 0) + 1;
+				votedVoters.push(voterKey);
+				localStorage.setItem('galaVotedVoters', JSON.stringify(votedVoters));
+				saveStatisticsToStorage();
 				setStatus('Twój głos został oddany poprawnie.', false);
 				updateResults();
 			});
@@ -338,6 +453,21 @@
 			});
 		}
 
-		loadVoters();
+		var exportStatisticsButton = document.getElementById('exportStatistics');
+		if (exportStatisticsButton) {
+			exportStatisticsButton.addEventListener('click', function() {
+				var csvContent = localStorage.getItem('galaStatisticsCsv') || 'name,faculty,commission,votes\n';
+				var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+				var url = URL.createObjectURL(blob);
+				var link = document.createElement('a');
+				link.href = url;
+				link.download = 'statistics.csv';
+				link.click();
+				URL.revokeObjectURL(url);
+				setStatus('Plik statistics.csv został przygotowany do pobrania.', false);
+			});
+		}
+
+		loadVotingData();
 
 })(jQuery);
