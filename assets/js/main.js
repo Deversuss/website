@@ -274,6 +274,43 @@
 			});
 		}
 
+		function buildFacultyAndCommissionOptions() {
+			var facultySelect = document.getElementById('voterFaculty');
+			var commissionSelect = document.getElementById('voterCommission');
+			if (!facultySelect || !commissionSelect) {
+				return;
+			}
+
+			var faculties = [];
+			var commissions = [];
+
+			voters.forEach(function(voter) {
+				if (faculties.indexOf(voter.faculty) === -1) {
+					faculties.push(voter.faculty);
+				}
+				if (commissions.indexOf(voter.commission) === -1) {
+					commissions.push(voter.commission);
+				}
+			});
+
+			facultySelect.innerHTML = '';
+			commissionSelect.innerHTML = '';
+
+			faculties.forEach(function(faculty) {
+				var option = document.createElement('option');
+				option.value = faculty;
+				option.textContent = faculty;
+				facultySelect.appendChild(option);
+			});
+
+			commissions.forEach(function(commission) {
+				var option = document.createElement('option');
+				option.value = commission;
+				option.textContent = commission;
+				commissionSelect.appendChild(option);
+			});
+		}
+
 		function setStatus(message, isError) {
 			var status = document.getElementById('voteStatus');
 			if (!status) {
@@ -421,6 +458,7 @@
 				}
 
 				buildCandidateOptions();
+				buildFacultyAndCommissionOptions();
 				saveStatisticsToStorage();
 				updateResults();
 			});
