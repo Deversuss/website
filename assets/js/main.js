@@ -284,6 +284,32 @@
 			status.style.color = isError ? '#ffb4b4' : '#d9ffb3';
 		}
 
+		function validateFormFields(name, faculty, commission, candidate) {
+			var errors = [];
+
+			if (!name || name.length < 2) {
+				errors.push('Podaj imię i nazwisko.');
+			}
+
+			if (!faculty || faculty.length < 3) {
+				errors.push('Podaj poprawny wydział.');
+			}
+
+			if (!commission || commission.length < 3) {
+				errors.push('Podaj poprawną komisję.');
+			}
+
+			if (!candidate) {
+				errors.push('Wybierz kandydata z listy.');
+			}
+
+			if (name && name.indexOf(' ') === -1) {
+				errors.push('Podaj imię i nazwisko w formacie: Imię Nazwisko.');
+			}
+
+			return errors;
+		}
+
 		function getVoterByIdentity(name, faculty, commission) {
 			return voters.find(function(voter) {
 				return normalizeValue(voter.name) === normalizeValue(name)
@@ -414,19 +440,20 @@
 				});
 				var voter = getVoterByIdentity(name, faculty, commission);
 				var voterKey = getVoterKey(name, faculty, commission);
+				var validationErrors = validateFormFields(name, faculty, commission, candidate);
+
+				if (validationErrors.length > 0) {
+					setStatus(validationErrors.join(' '), true);
+					return;
+				}
 
 				if (!voter) {
-					setStatus('Nie znaleziono Cię w pliku voters.txt. Nie możesz oddać głosu.', true);
+					setStatus('Nie znaleziono Cię w pliku voters.txt. Sprawdź wpisane dane i spróbuj ponownie.', true);
 					return;
 				}
 
 				if (votedVoters.indexOf(voterKey) !== -1) {
 					setStatus('Ten wyborca już oddał głos. Jednorazowy głos został wykorzystany.', true);
-					return;
-				}
-
-				if (!candidate) {
-					setStatus('Wybierz kandydata z listy.', true);
 					return;
 				}
 
