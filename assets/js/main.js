@@ -204,6 +204,7 @@
 		var voters = [];
 		var votedVoters = [];
 		var votes = {};
+		var voterPoints = {};
 		var showResults = false;
 
 		function normalizeValue(value) {
@@ -361,6 +362,7 @@
 
 		function resetVotes() {
 			votes = {};
+			voterPoints = {};
 			candidates.forEach(function(candidate) {
 				votes[candidate.name] = 0;
 			});
@@ -373,6 +375,7 @@
 
 			localStorage.setItem('galaStatistics', JSON.stringify(votes));
 			localStorage.setItem('galaStatisticsCsv', csvContent);
+			localStorage.setItem('galaVoterPoints', JSON.stringify(voterPoints));
 		}
 
 		function updateResults() {
@@ -457,6 +460,15 @@
 					}
 				}
 
+				var savedPoints = localStorage.getItem('galaVoterPoints');
+				if (savedPoints) {
+					try {
+						voterPoints = JSON.parse(savedPoints);
+					} catch (error) {
+						voterPoints = {};
+					}
+				}
+
 				buildCandidateOptions();
 				buildFacultyAndCommissionOptions();
 				saveStatisticsToStorage();
@@ -501,10 +513,11 @@
 				}
 
 				votes[candidate.name] = (votes[candidate.name] || 0) + 1;
+				voterPoints[voterKey] = (voterPoints[voterKey] || 0) + 1;
 				votedVoters.push(voterKey);
 				localStorage.setItem('galaVotedVoters', JSON.stringify(votedVoters));
 				saveStatisticsToStorage();
-				setStatus('Twój głos został oddany poprawnie.', false);
+				setStatus('Twój głos został oddany poprawnie. Został zapisany jako 1 punkt dla wybranego kandydata.', false);
 				updateResults();
 			});
 		}
