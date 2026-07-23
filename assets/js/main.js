@@ -487,49 +487,64 @@
 			return loadPromise;
 		}
 
+		function submitVote(event) {
+			if (event) {
+				event.preventDefault();
+				event.stopPropagation();
+			}
+
+			var name = document.getElementById('voterName').value.trim();
+			var faculty = document.getElementById('voterFaculty').value.trim();
+			var commission = document.getElementById('voterCommission').value.trim();
+			var candidateName = document.getElementById('candidateSelect').value;
+			var candidate = candidates.find(function(entry) {
+				return entry.name === candidateName;
+			});
+			var voter = getVoterByIdentity(name, faculty, commission);
+			var voterKey = getVoterKey(name, faculty, commission);
+			var validationErrors = validateFormFields(name, faculty, commission, candidate);
+
+			if (validationErrors.length > 0) {
+				setStatus(validationErrors.join(' '), true);
+				return;
+			}
+
+			if (!voter) {
+				setStatus('Nie znaleziono Cię w pliku voters.txt. Sprawdź wpisane dane i spróbuj ponownie.', true);
+				return;
+			}
+
+			if (votedVoters.indexOf(voterKey) !== -1) {
+				setStatus('Ten wyborca już oddał głos. Jednorazowy głos został wykorzystany.', true);
+				return;
+			}
+
+			if (normalizeValue(faculty) === 'wydział informatyki' && (normalizeValue(candidate.faculty) === normalizeValue(faculty) || normalizeValue(candidate.commission) === normalizeValue(commission))) {
+				setStatus('Osoby z Wydziału Informatyki nie mogą głosować na własny wydział ani na własną komisję.', true);
+				return;
+			}
+
+			votes[candidate.name] = (votes[candidate.name] || 0) + 1;
+			voterPoints[voterKey] = (voterPoints[voterKey] || 0) + 1;
+			votedVoters.push(voterKey);
+			localStorage.setItem('galaVotedVoters', JSON.stringify(votedVoters));
+			saveStatisticsToStorage();
+			setStatus('Twój głos został oddany poprawnie. Został zapisany jako 1 punkt dla wybranego kandydata.', false);
+			updateResults();
+		}
+
 		var voteForm = document.getElementById('voteForm');
 		if (voteForm) {
 			voteForm.addEventListener('submit', function(event) {
-				event.preventDefault();
+				submitVote(event);
+			});
+		}
 
-				var name = document.getElementById('voterName').value.trim();
-				var faculty = document.getElementById('voterFaculty').value.trim();
-				var commission = document.getElementById('voterCommission').value.trim();
-				var candidateName = document.getElementById('candidateSelect').value;
-				var candidate = candidates.find(function(entry) {
-					return entry.name === candidateName;
-				});
-				var voter = getVoterByIdentity(name, faculty, commission);
-				var voterKey = getVoterKey(name, faculty, commission);
-				var validationErrors = validateFormFields(name, faculty, commission, candidate);
-
-				if (validationErrors.length > 0) {
-					setStatus(validationErrors.join(' '), true);
-					return;
-				}
-
-				if (!voter) {
-					setStatus('Nie znaleziono Cię w pliku voters.txt. Sprawdź wpisane dane i spróbuj ponownie.', true);
-					return;
-				}
-
-				if (votedVoters.indexOf(voterKey) !== -1) {
-					setStatus('Ten wyborca już oddał głos. Jednorazowy głos został wykorzystany.', true);
-					return;
-				}
-
-				if (normalizeValue(faculty) === 'wydział informatyki' && (normalizeValue(candidate.faculty) === normalizeValue(faculty) || normalizeValue(candidate.commission) === normalizeValue(commission))) {
-					setStatus('Osoby z Wydziału Informatyki nie mogą głosować na własny wydział ani na własną komisję.', true);
-					return;
-				}
-
-				votes[candidate.name] = (votes[candidate.name] || 0) + 1;
-				voterPoints[voterKey] = (voterPoints[voterKey] || 0) + 1;
-				votedVoters.push(voterKey);
-				localStorage.setItem('galaVotedVoters', JSON.stringify(votedVoters));
-				saveStatisticsToStorage();
-				setStatus('Twój głos został oddany poprawnie. Został zapisany jako 1 punkt dla wybranego kandydata.', false);
-				updateResults();
+		var voteSubmitButton = document.querySelector('#voteForm .submit');
+		if (voteSubmitButton) {
+			voteSubmitButton.addEventListener('click', function(event) {
+				event.stopImmediatePropagation();
+				submitVote(event);
 			});
 		}
 
